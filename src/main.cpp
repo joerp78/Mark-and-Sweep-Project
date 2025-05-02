@@ -1,38 +1,27 @@
-#include <my_malloc.h>
 #include <stdio.h>
+#include <gc.h>
+#include <heap.h>
 
 int main() {
-  void *allocated[10];
-  print_free_list();
-  printf("Available memory before: %zd.\n", available_memory());
-  for (int i = 0; i < 10; i++) {
-    allocated[i] = my_malloc(100);
-  }
-  print_free_list();
-  printf("Available memory after: %zd.\n", available_memory());
+    Heap heap;
+    GarbageCollector gc;
 
-  printf("Available memory before: %zd.\n", available_memory());
-  for (int i = 0; i < 10; i++) {
-    my_free(allocated[i]);
-  }
-  print_free_list();
-  printf("Available memory after: %zd.\n", available_memory());
+    void *ptr1 = gc.malloc(100, &heap);
+    void *ptr2 = gc.malloc(100, &heap);
 
-  reset_heap();
+    gc.add_nested_reference(ptr1, ptr2);
+    gc.add_nested_reference(ptr2, ptr1);
 
-  printf("Available memory before: %zd.\n", available_memory());
-  for (int i = 0; i < 10; i++) {
-    allocated[i] = my_malloc(100);
-  }
-  print_free_list();
-  printf("Available memory after: %zd.\n", available_memory());
+    cout << "Free space: " << heap.available_memory() << endl;
 
-  printf("Available memory before: %zd.\n", available_memory());
-  for (int i = 9; i >= 0; i--) {
-    my_free(allocated[i]);
-  }
-  print_free_list();
-  printf("Available memory after: %zd.\n", available_memory());
+    gc.delete_reference(ptr1);
+    gc.delete_reference(ptr2);
 
-  return 0;
+    gc.rc_collect(&heap);
+    cout << "Free space: " << heap.available_memory() << endl;
+
+    gc.ms_collect(&heap);
+    cout << "Free space: " << heap.available_memory() << endl;
+    
+    return 0;
 }
