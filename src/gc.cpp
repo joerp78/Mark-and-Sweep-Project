@@ -155,6 +155,7 @@ void GarbageCollector::delete_reference(void *ptr) {
  */
 void GarbageCollector::ms_collect(Heap *heap) {
     cout << "EXECUTE MS_COLLECT() AT: " << heap << endl;
+    if(heap->available_memory() == 4080) return; 
     mark();
     sweep(heap);
 }

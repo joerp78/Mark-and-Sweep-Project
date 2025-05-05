@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 #include <gc.h>
 #include <heap.h>
+#include <chrono>
+
 
 using namespace std;
+using namespace std::chrono;
 
 //Compute the size of user header and initial free space
-static constexpr size_t initial_free_space() {
+static size_t initial_free_space() {
     return HEAP_SIZE - sizeof(Heap::node_t);
 }
 
@@ -44,6 +47,30 @@ TEST_F(GCHeapTest, AvailableMemoryAfterTwoAllocations) {
     ASSERT_EQ(free_mem, expected);
 }
 
+//Verifies RC collection works correctly
+TEST_F(GCHeapTest, RCCollect) {
+    std::vector<void*> ptrs;
+    const int blockSize = 100;
+    //Fully allocate heap 
+    while (true) {
+        void* p = gc.malloc(blockSize, &heap);
+        if (!p) break;
+        ptrs.push_back(p);
+    }
+    //Verify heap and pointers are properly allocated
+    ASSERT_FALSE(ptrs.empty()) << "Should allocate at least one block";
+
+    //Remove references to allocated pointers for RC to collect
+    for (void* p : ptrs) {
+        gc.delete_reference(p);
+    }
+
+    //Run garbage collection and verify memory state
+    gc.rc_collect(&heap);
+
+    ASSERT_EQ(heap.available_memory(), initial_free_space());
+}
+
 //Verifies that reference counting doesn't work on cyclic references 
 //Memory allocated and then roots deleted, count is still >0 so RC GC doesn't delete 
 TEST_F(GCHeapTest, ReferenceCountingLeavesCycle) {
@@ -67,20 +94,19 @@ TEST_F(GCHeapTest, ReferenceCountingLeavesCycle) {
 //Verifies that mark and sweep collects cyclic references
 //Same setup as previous test but mark and sweep cleans up what RC couldn't collect
 TEST_F(GCHeapTest, MarksweepReclaimsCycle) {
-    // Allocate and create cycle
+    //Allocate and create cycle
     void* ptr1 = gc.malloc(100, &heap);
     void* ptr2 = gc.malloc(100, &heap);
     gc.add_nested_reference(ptr1, ptr2);
     gc.add_nested_reference(ptr2, ptr1);
-    // Remove root references
+    //Remove root references
     gc.delete_reference(ptr1);
     gc.delete_reference(ptr2);
 
-    // First RC, then MS
     gc.rc_collect(&heap);
     gc.ms_collect(&heap);
 
-    // MS should reclaim all unreachable objects, resetting heap
+    //MS should reclaim all unreachable objects, resetting heap
     ASSERT_EQ(heap.available_memory(), initial_free_space());
 }
 
@@ -107,10 +133,10 @@ TEST_F(GCHeapTest, TwoAdjacentFreesCoalesceIntoOne) {
     //Verify output format is "Free(<size>)\n" when there's just one node
     std::ostringstream oss;
     oss << "Free(" << expected_space << ")->\n";
-    EXPECT_EQ(dump, oss.str());
+    ASSERT_EQ(dump, oss.str());
 }
 
-//This is a stress test for the allocator 
+//This is a stress test for the allocator and MS garbage collector  
 //Max blocks of size 32 are allocated, then 1 max size block is allocated
 TEST_F(GCHeapTest, StressTestFullHeap) {
     const size_t blockSize = 32;
@@ -123,7 +149,7 @@ TEST_F(GCHeapTest, StressTestFullHeap) {
         ptrs.push_back(p);
     }
     ASSERT_FALSE(ptrs.empty())
-        << "Should have allocated at least one block before running out";
+        << "Should have allocated at least one block";
     //Shouldn't be able to fit another blockSize chunk
     ASSERT_LT(heap.available_memory(), blockSize);
 
@@ -132,18 +158,16 @@ TEST_F(GCHeapTest, StressTestFullHeap) {
         gc.add_nested_reference(ptrs[i-1], ptrs[i]);
     }
 
-
     //Drop all root refs and collect
     for (void* p : ptrs) {
         gc.delete_reference(p);
     }
 
-
-    //KINDA WEIRD BEHAVIOR, test fails if RC then MS, need to dig deeper to understand 
-    //why i gotta stop lookin at a computer rn 
-    //gc.rc_collect(&heap);
-
+    //Take timestamp before/after MS runs and calculate
+    auto t0 = high_resolution_clock::now();
     gc.ms_collect(&heap);
+    auto t1 = high_resolution_clock::now();
+    auto ms_time = duration_cast<microseconds>(t1 - t0).count();
 
     // After mark-sweep, there should be a completely free heap
     size_t actual = heap.available_memory();
@@ -157,10 +181,89 @@ TEST_F(GCHeapTest, StressTestFullHeap) {
     void* big = gc.malloc(max, &heap);
     ASSERT_NE(big, nullptr)
         << "Should be able to malloc the entire heap once it's free again";
-
+    
+    //Take timestamp before/after MS runs and calculate
     gc.delete_reference(big);
+    auto t2 = high_resolution_clock::now();
     gc.ms_collect(&heap);
+    auto t3 = high_resolution_clock::now();
+    auto ms_time_big = duration_cast<microseconds>(t1 - t0).count();
+
+
+    std::cout<< "32 bit collect took " << ms_time << "µs" << endl;
+    std::cout<< "Big block collect took " << ms_time_big << "µs" << endl;
+
+
     ASSERT_EQ(heap.available_memory(), initial_free_space());
+}
+
+//This test compares the execution time of RC and MS garbage collectors
+//MS is given a list of cyclic references, RC is given standard allocations
+TEST_F(GCHeapTest, Efficiency_StressTest_RCvsMS) {
+    const size_t blockSize = 32;
+    size_t rc_time, ms_time;
+    
+    {
+    std::vector<void*> ptrs;
+
+    //Fill the heap
+    while (true) {
+        void* p = gc.malloc(blockSize, &heap);
+        if (!p) break;
+        ptrs.push_back(p);
+    }
+    ASSERT_FALSE(ptrs.empty()) << "Should allocate at least one block";
+
+    //Drop all roots
+    for (void* p : ptrs) {
+        gc.delete_reference(p);
+    }
+
+    //Time the RC pass on the unchained blocks
+    auto t0 = std::chrono::high_resolution_clock::now();
+    gc.rc_collect(&heap);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    rc_time = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+
+    ASSERT_EQ(heap.available_memory(), initial_free_space());
+    }
+    heap.reset();
+    {
+    std::vector<void*> ptrs;
+
+    //Fill the heap
+    while (true) {
+        void* p = gc.malloc(blockSize, &heap);
+        if (!p) break;
+        ptrs.push_back(p);
+    }
+    ASSERT_FALSE(ptrs.empty()) << "Should allocate at least one block before exhaustion";
+    ASSERT_LT(heap.available_memory(), blockSize)
+        << "Remaining free should be less than one block";
+
+    //Chain the blocks together 
+    for (size_t i = 1; i < ptrs.size(); ++i) {
+        gc.add_nested_reference(ptrs[i-1], ptrs[i]);
+    }
+    //Drop all roots
+    for (void* p : ptrs) {
+        gc.delete_reference(p);
+    }
+
+    //Time the MS pass on the chained blocks
+    auto t2 = std::chrono::high_resolution_clock::now();
+    gc.ms_collect(&heap);
+    auto t3 = std::chrono::high_resolution_clock::now();
+    ms_time = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count();
+
+    ASSERT_EQ(heap.available_memory(), initial_free_space());
+    }
+
+    //Check efficiency, RC should be faster than MS
+    EXPECT_LT(rc_time, ms_time)
+        << "rc_collect took " << rc_time << "µs; ms_collect took " << ms_time << "µs";
+
+    std::cout << "rc_collect: " << rc_time << "µs,    ms_collect: " << ms_time << "µs\n";
 }
 
 

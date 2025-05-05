@@ -36,7 +36,7 @@ Heap::node_t* Heap::start() {
  */
 void Heap::reset() {
     if (head != NULL) {
-        munmap(head, HEAP_SIZE);
+        munmap(head, HEAP_SIZE + sizeof(node_t));
         head = NULL;
         Heap::start();
     }
@@ -120,7 +120,7 @@ void Heap::coalesce(node_t *free_block) {
     node_t *next = head;
     node_t *prev = NULL;
 
-    while (next && next < free_block) {
+    while (next != tail && next < free_block) {
         prev = next;
         next = next->next;
     }
@@ -133,10 +133,11 @@ void Heap::coalesce(node_t *free_block) {
         head = free_block;
     }
 
-    if (next &&
+    if (next && free_block->next != tail &&
         (char *)free_block + free_block->size + sizeof(node_t) == (char *)next) {
-        free_block->size += next->size + sizeof(node_t);
-        free_block->next = next->next;
+        node_t* second = free_block->next;
+        free_block->size += second->size + sizeof(node_t);
+        free_block->next = second->next;
     }
 
     if (prev &&
