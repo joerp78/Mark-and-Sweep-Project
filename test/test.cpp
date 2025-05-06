@@ -163,6 +163,8 @@ TEST_F(GCHeapTest, StressTestFullHeap) {
         gc.delete_reference(p);
     }
 
+    gc.rc_collect(&heap);
+
     //Take timestamp before/after MS runs and calculate
     auto t0 = high_resolution_clock::now();
     gc.ms_collect(&heap);
