@@ -9,6 +9,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <list>
 
 using namespace std;
 class Heap;
@@ -38,14 +39,14 @@ class GarbageCollector {
          * Frees any unreachable objects from the heap.
          * @param heap The heap to operate on.
          */
-        void ms_collect(Heap *heap);
+        list<void*> ms_collect(Heap *heap);
 
         /**
          * Runs reference-counting garbage collection.
          * Frees objects whose reference count has dropped to zero.
          * @param heap The heap to operate on.
          */
-        void rc_collect(Heap *heap);
+        list<void*> rc_collect(Heap *heap);
 
         /**
          * Adds a pointer to the root set to simulate a live reference.
@@ -84,7 +85,7 @@ class GarbageCollector {
          * Performs the sweep phase by freeing all unmarked objects in the allocations map.
          * @param heap The heap to free memory from.
          */
-        void sweep(Heap *heap);
+        list<void*> sweep(Heap *heap);
 
         /**
          * Recursively walks the contents of a memory block, marking any reachable pointers found.
