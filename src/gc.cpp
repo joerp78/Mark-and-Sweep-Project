@@ -82,14 +82,14 @@ void GarbageCollector::mark() {
  *
  * @param heap Pointer to the heap object used for deallocation.
  */
-void GarbageCollector::sweep(Heap *heap) {
+list<void*> GarbageCollector::sweep(Heap *heap) {
     list<void*> deleted;
     bool any_marked = false;
     for (auto block = allocations.begin(); block != allocations.end(); ) {
         if (!block->second->marked) {
             void* dead = block->first;
             deleted.push_back(block->first);
-            ++alloc;
+            ++block;
             GC_free(dead, heap);
         } else {
             ++block;
