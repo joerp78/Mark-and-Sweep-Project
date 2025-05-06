@@ -120,41 +120,31 @@ void Heap::split(size_t size, node_t **prev, node_t **free_block,
 void Heap::coalesce(node_t *free_block) {
     node_t *next = this->head;
     node_t *prev = NULL;
-    cout << "1a" << endl;
     while (next && next < free_block) {
-        cout << "2a" << endl;
         prev = next;
         next = next->next;
     }
 
     free_block->next = next;
-    cout << "3a" << endl;
 
     if (prev) {
         prev->next = free_block;
-        cout << "4a" << endl;
     } else {
         this->head = free_block;
-        cout << "5a" << endl;
     }
-    cout << "6a" << endl;
 
     if (free_block->next != this->tail &&
         (char *)free_block + free_block->size + sizeof(node_t) 
         == (char *)free_block->next) {
-        cout << "7a" << endl;
         node_t* second = free_block->next;
         free_block->size += second->size + sizeof(node_t);
         free_block->next = second->next;
     }
-    cout << "8a" << endl;
     if (prev &&
         (char *)prev + prev->size + sizeof(node_t) == (char *)free_block) {
         prev->size += free_block->size + sizeof(node_t);
         prev->next = free_block->next;
     }
-    cout << "9a" << endl;
-
 }
 
 /**
@@ -184,15 +174,10 @@ void *Heap::my_malloc(size_t size) {
  * @param allocated Pointer to the memory block to free (as returned by my_malloc).
  */
 void Heap::my_free(void *allocated) {
-    cout << "A" << endl;
     Allocation *header = (Allocation *)((char *)allocated - sizeof(Allocation));
-    cout << "B" << endl;
     node_t *free_node = (node_t *)header;
-    cout << "C" << endl;
     free_node->size = header->size;
-    cout << "D" << endl;
     Heap::coalesce(free_node);
-    cout << "E" << endl;
 }
 
 /**

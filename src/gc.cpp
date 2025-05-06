@@ -84,31 +84,20 @@ void GarbageCollector::mark() {
  * @param heap Pointer to the heap object used for deallocation.
  */
 void GarbageCollector::sweep(Heap *heap) {
-    cout << "1" << endl;
     // Free all allocations not marked as found
     cout << heap->available_memory() << endl; 
     if (allocations.empty()) {
-        cout << "2" << endl;
         heap->reset();
     }
-    cout << "3" << endl;
     for (auto alloc = allocations.begin(); alloc != allocations.end(); ) {
-        //cout << "4" << heap->available_memory() << endl;
         if (!alloc->second->marked) {
-            cout << "5" << endl;
-            //heap->my_free(alloc->first);
-            //cout << "6" << endl;
-            //alloc = allocations.erase(alloc);
             void* dead = alloc->first;
             ++alloc;
             GC_free(dead, heap);
-            cout << "7" << endl;
         } else {
             ++alloc;
         }
-        cout << "8" << endl;
     }
-    cout << "9" << endl;
 }
 
 /**
@@ -168,10 +157,7 @@ void GarbageCollector::delete_reference(void *ptr) {
 void GarbageCollector::ms_collect(Heap *heap) {
     cout << "EXECUTE MS_COLLECT() AT: " << heap << endl;
     mark();
-    cout << "SWEEPING" << endl;
     sweep(heap);
-    cout << "FINISHED" << endl;
-
 }
 
 /**
