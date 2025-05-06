@@ -94,6 +94,12 @@ class GarbageCollector {
         void walk_block(void *ptr);
 
         /**
+         *Frees a block from the heap, removing its reference in the allocation and reference count lists
+         *Used in sweep and RC_collect, both garbage collection algorithms
+         */
+        void GC_free(void* ptr, Heap* heap);
+
+        /**
          * Maps allocated heap pointers to their metadata.
          * This is the internal structure used to manage all tracked heap allocations.
          * Only modified during malloc() and sweep().

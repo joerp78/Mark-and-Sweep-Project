@@ -82,18 +82,17 @@ void GarbageCollector::mark() {
  *
  * @param heap Pointer to the heap object used for deallocation.
  */
-list<void*> GarbageCollector::sweep(Heap *heap) {
+void GarbageCollector::sweep(Heap *heap) {
     list<void*> deleted;
     bool any_marked = false;
-
-    for (auto alloc = allocations.begin(); alloc != allocations.end(); ) {
-        if (!alloc->second->marked) {
-            heap->my_free(alloc->first);
-            deleted.push_back(alloc->first);
-            alloc = allocations.erase(alloc);
+    for (auto block = allocations.begin(); block != allocations.end(); ) {
+        if (!block->second->marked) {
+            void* dead = block->first;
+            deleted.push_back(block->first);
+            ++alloc;
+            GC_free(dead, heap);
         } else {
-            any_marked = true;
-            alloc++;
+            ++block;
         }
     }
 
@@ -172,12 +171,27 @@ list<void*> GarbageCollector::rc_collect(Heap *heap) {
     list<void*> deleted;
     for (auto block = reference_count.begin(); block != reference_count.end(); ) {
         if (block->second <= 0) {
-            heap->my_free(block->first);
+            void* dead = block->first;
             deleted.push_back(block->first);
-            block = reference_count.erase(block);
+            ++block;
+            GC_free(dead, heap);
         } else {
-            block++;
+            ++block;
         }
     }
     return deleted;
+}
+
+/**
+ * Frees a block from the heap, removing its reference in the allocation and reference count lists
+ * 
+ * @param ptr pointer to a block to free and be removed from the allocation and reference_count list 
+ * @param heap Pointer to the heap to be garbage collected.
+ */
+
+void GarbageCollector::GC_free(void * ptr, Heap* heap){
+    heap->my_free(ptr);
+    allocations.erase(ptr);
+    reference_count.erase(ptr);
+    root_set.erase(ptr);
 }

@@ -9,8 +9,8 @@
 using namespace std;
 using Allocation = GarbageCollector::allocation;
 
-Heap::node_t *head = NULL;
-Heap::node_t *tail = NULL;
+//Heap::node_t *head = NULL;
+//Heap::node_t *tail = NULL;
 
 /**
  * Initializes the heap if it has not been created yet.
@@ -19,25 +19,26 @@ Heap::node_t *tail = NULL;
  * @return Pointer to the head node of the free list.
  */
 Heap::node_t* Heap::start() {
-    if (head == NULL) {
-        head = (node_t *)mmap(NULL, HEAP_SIZE + sizeof(node_t),
+    if (this->tail == nullptr) {
+        this->head = (node_t *)mmap(NULL, HEAP_SIZE + sizeof(node_t),
                               PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
-        tail = (node_t *)((char *)head + HEAP_SIZE);
-        head->size = HEAP_SIZE - sizeof(node_t);
-        head->next = tail;
-        tail->size = 0;
-        tail->next = NULL;
+        this->tail = (node_t *)((char *)this->head + HEAP_SIZE);
+        this->head->size = HEAP_SIZE - sizeof(node_t);
+        this->head->next = tail;
+        this->tail->size = 0;
+        this->tail->next = NULL;
     }
-    return head;
+    return this->head;
 }
 
 /**
  * Resets the heap by unmapping the current region and reinitializing it.
  */
 void Heap::reset() {
-    if (head != NULL) {
-        munmap(head, HEAP_SIZE + sizeof(node_t));
-        head = NULL;
+    if (this->head != NULL) {
+        munmap(this->head, HEAP_SIZE + sizeof(node_t));
+        this->head = NULL;
+        this->tail = NULL;
         Heap::start();
     }
 }
@@ -101,7 +102,7 @@ void Heap::split(size_t size, node_t **prev, node_t **free_block,
     (*free_block)->next = temp->next;
 
     if (*prev == NULL) {
-        head = *free_block;
+        this->head = *free_block;
     } else {
         (*prev)->next = *free_block;
     }
@@ -117,9 +118,8 @@ void Heap::split(size_t size, node_t **prev, node_t **free_block,
  * @param free_block Pointer to the block being freed.
  */
 void Heap::coalesce(node_t *free_block) {
-    node_t *next = head;
+    node_t *next = this->head;
     node_t *prev = NULL;
-
     while (next && next < free_block) {
         prev = next;
         next = next->next;
@@ -130,15 +130,16 @@ void Heap::coalesce(node_t *free_block) {
     if (prev) {
         prev->next = free_block;
     } else {
-        head = free_block;
+        this->head = free_block;
     }
 
-    if (next &&
-        (char *)free_block + free_block->size + sizeof(node_t) == (char *)next) {
-        free_block->size += next->size + sizeof(node_t);
-        free_block->next = next->next;
+    if (free_block->next != this->tail &&
+        (char *)free_block + free_block->size + sizeof(node_t) 
+        == (char *)free_block->next) {
+        node_t* second = free_block->next;
+        free_block->size += second->size + sizeof(node_t);
+        free_block->next = second->next;
     }
-
     if (prev &&
         (char *)prev + prev->size + sizeof(node_t) == (char *)free_block) {
         prev->size += free_block->size + sizeof(node_t);
