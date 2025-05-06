@@ -36,7 +36,7 @@ Heap::node_t* Heap::start() {
  */
 void Heap::reset() {
     if (head != NULL) {
-        munmap(head, HEAP_SIZE);
+        munmap(head, HEAP_SIZE + sizeof(node_t));
         head = NULL;
         Heap::start();
     }

@@ -17,7 +17,6 @@ void* GarbageCollector::malloc(size_t size, Heap *heap) {
         allocations[ptr] = (allocation *)((char*)ptr - sizeof(allocation));
         add_reference(ptr);
     } else {
-        cerr << "Memory allocation failed!" << endl;
         return NULL;
     }
 
@@ -83,20 +82,27 @@ void GarbageCollector::mark() {
  *
  * @param heap Pointer to the heap object used for deallocation.
  */
-void GarbageCollector::sweep(Heap *heap) {
-    
-    // Free all allocations not marked as found
-    if (allocations.empty()) {
-        heap->reset();
-    }
+list<void*> GarbageCollector::sweep(Heap *heap) {
+    list<void*> deleted;
+    bool any_marked = false;
+
     for (auto alloc = allocations.begin(); alloc != allocations.end(); ) {
         if (!alloc->second->marked) {
             heap->my_free(alloc->first);
+            deleted.push_back(alloc->first);
             alloc = allocations.erase(alloc);
         } else {
+            any_marked = true;
             alloc++;
         }
     }
+
+    // If nothing is left in allocations, reset heap structure
+    if (!any_marked) {
+        heap->reset();
+    }
+
+    return deleted;
 }
 
 /**
@@ -127,7 +133,6 @@ int GarbageCollector::add_nested_reference(void *src, void *dest) {
         ((void **)src)[0] = dest;
         reference_count[dest]++;
     } else {
-        cerr << "ERROR: Not enough space for nested reference!" << endl;
         return -1;
     }
     return 0;
@@ -153,10 +158,9 @@ void GarbageCollector::delete_reference(void *ptr) {
  * 
  * @param heap Pointer to the heap to be garbage collected.
  */
-void GarbageCollector::ms_collect(Heap *heap) {
-    cout << "EXECUTE MS_COLLECT() AT: " << heap << endl;
+list<void*> GarbageCollector::ms_collect(Heap *heap) {
     mark();
-    sweep(heap);
+    return sweep(heap);
 }
 
 /**
@@ -164,14 +168,16 @@ void GarbageCollector::ms_collect(Heap *heap) {
  * 
  * @param heap Pointer to the heap to be garbage collected.
  */
-void GarbageCollector::rc_collect(Heap *heap) {
-    cout << "EXECUTE RC_COLLECT() AT: " << heap << endl;
+list<void*> GarbageCollector::rc_collect(Heap *heap) {
+    list<void*> deleted;
     for (auto block = reference_count.begin(); block != reference_count.end(); ) {
         if (block->second <= 0) {
             heap->my_free(block->first);
+            deleted.push_back(block->first);
             block = reference_count.erase(block);
         } else {
             block++;
         }
     }
+    return deleted;
 }
