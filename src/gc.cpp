@@ -84,20 +84,19 @@ void GarbageCollector::mark() {
  */
 list<void*> GarbageCollector::sweep(Heap *heap) {
     list<void*> deleted;
-    bool any_marked = false;
     for (auto block = allocations.begin(); block != allocations.end(); ) {
         if (!block->second->marked) {
             void* dead = block->first;
             deleted.push_back(block->first);
-            ++block;
             GC_free(dead, heap);
+            block = allocations.begin();
         } else {
             ++block;
         }
     }
 
     // If nothing is left in allocations, reset heap structure
-    if (!any_marked) {
+    if (allocations.empty()) {
         heap->reset();
     }
 
@@ -144,12 +143,24 @@ int GarbageCollector::add_nested_reference(void *src, void *dest) {
  */
 void GarbageCollector::delete_reference(void *ptr) {
     //cout << "Deleting reference: " << ptr << " from root_set" << endl;
+    /*
     int erased = root_set.erase(ptr);
 
     // Check that a reference was actually deleted
     if (erased > 0) {
         reference_count[ptr]--;
     }
+    */
+   auto it = root_set.find(ptr);
+   if (it == root_set.end()) return;
+   root_set.erase(it);
+
+   auto rc_it = reference_count.find(ptr);
+   if (rc_it != reference_count.end()) {
+       rc_it->second--;
+       if (rc_it->second < 0)
+           rc_it->second = 0;
+   }
 }
 
 /**
@@ -173,8 +184,8 @@ list<void*> GarbageCollector::rc_collect(Heap *heap) {
         if (block->second <= 0) {
             void* dead = block->first;
             deleted.push_back(block->first);
-            ++block;
             GC_free(dead, heap);
+            block = reference_count.begin();
         } else {
             ++block;
         }
